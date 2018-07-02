@@ -1,0 +1,30 @@
+m1      froot       # output file root name
+0.01    dt          # timestep
+1e3     tmax        # total integration time  
+22.0    t_print     # time for output prints
+22.0    t_heat      # time for heat output prints
+0.5     powerfac    # fraction of heat to center of springs
+0       lattice     # 0=rand 
+0.10   b_distance  # mininum interparticle spacing
+2.31    mush_fac    # sets maximum spring size 
+1.00    ratio1      # body axis ratio b/a set to 1 for oblate
+0.95    ratio2      # body axis ratio c/a
+0.287   omegaz      # initial spin 
+20.0    obliq_deg   # obliquity in degrees
+100.0   gamma_fac   # initial damping coefficient is this factor times gamma
+10.0    t_damp      # time for initial damping
+0.1     surfdist    # distance to surface for surface markers
+5.0e-2  ks_hot      # spring constant
+5.0e-1  ks_cold     # "  in two temperature model
+1.0e-2  gamma_hot   # damping
+1.0     gamma_cold  # "
+1.0     cp_hot      # specific heat
+1.0     cp_cold     #  not used
+1e-4    k_heat_hot  # heat conductivity in a spring
+1e-5    k_heat_cold # "
+1.0e-7  Ttrans      # transition temperature for two temp model
+1.0     Tinit       # initial temperature of all interior nodes
+0.0     dote_radg   # radiogenic heating energy per unit mass per unit time
+1       npointmass  # number of point masses
+81.3   3.7 0.0  0.0               #  mass,rad,itaua,itaue
+10.0  0.05 0.00 0.0  0.0  0.0     #  aa,ee,ii,longnode,argperi,meananom for extended body
