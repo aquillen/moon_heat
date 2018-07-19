@@ -1,6 +1,6 @@
 /**
  * @file        spring.h
- * @brief       Particle pair structure 
+ * @brief       springs 
  * @author      Alice Quilen 
  */
 
@@ -20,15 +20,8 @@ struct spring  {
 	int    i;    // vertex 1 referring to a particle
 	int    j;    // vertex 2 referring to a particle
 };
-struct surfacepoint  {  //ZYH
-        int idf;      //   particle id of point near surface
-        int ilong;   //  id of longitude of point
-        int ilati;  // id of latitude of point
-        double dist;  // distance of surface point
-};
-extern struct surfacepoint sfp[6000]; //ZYH
 
-struct stresstensor  {  // for each node
+struct stresstensor {  // for each node
         double sigxx; //stress tensor
         double sigyy;
         double sigzz;
@@ -102,6 +95,7 @@ void subtractcov();
 void subtractcom();
 void print_extended();
 void print_extended_simp();
+void print_extended_2nodes();
 void print_pm();
 void hfilename();
 double add_pt_mass_kep();
@@ -120,6 +114,7 @@ double mindist();
 void centerbody();
 void connect_springs_dist();
 void rand_football();
+void rand_rectangle();
 void rand_cone();
 void rand_football_from_sphere();
 double Young_mush();
@@ -130,6 +125,7 @@ void spin();
 void make_binary_spring();
 void mom_inertia();
 void measure_L();
+void measure_L_origin();
 void compute_semi();
 void compute_semi_bin();
 void total_mom();
@@ -142,12 +138,16 @@ void body_spin();
 void print_tab();
 void print_bin();
 void print_heat();
+void write_particles();
+void toistring();
+void zero_accel();
 void invI();
 double detI();
 void eigenvalues();
 void adjust_ks();
 void adjust_mass_side();
 void rotate_body();
+void rotate_origin();
 void rotate_vector();
 double fill_hcp();
 double fill_cubic();
@@ -161,6 +161,7 @@ void dodrift_res();
 void addto_heatvec();
 void norm_heatvec();
 double compute_rot_kin();
+void adjust_nodes_cp();
 
 
 #endif // _SPRING_H

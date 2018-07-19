@@ -25,6 +25,7 @@ double *heatvec; // global so can be reached by all routines here
 //   (need to normalize so units of power)
 // powerfac is how much of heat to distribute at center of spring 
 //    rather than at nodes
+// also outputs rotated xy, after rotates assuming xy plane for orbit and toward pertuber
 void print_heat(struct reb_simulation* const r, int npert, 
       char* filename, int ndt, double powerfac)
 {
@@ -34,7 +35,7 @@ void print_heat(struct reb_simulation* const r, int npert,
 
    FILE *fpo;
    fpo = fopen(filename, "w");
-   fprintf(fpo,"#%.2e\n",r->t);
+   fprintf(fpo,"#%.2e xyz dedt xrot yrot \n",r->t);
    int il =0;
    int ih =r->N-npert; // NPERT?
    double xc,yc,zc;
@@ -148,13 +149,13 @@ void nfilename(struct reb_simulation* const r,char *root, double tp, char *fname
    strcat(fname,"_node.txt");
 }
 
-// allocate a node vector, index per each mass node
-// initialize with specific heat and temperature
+// allocate a node vector, index per each mass node (including point masses)
+// initialize each node with a specific heat and temperature
 struct node *mknodevec(struct reb_simulation* const r, double cv,double T0){
    struct node *nodevec;
    nodevec = malloc(sizeof(struct node)*(r->N+10));
    for (int i=0;i< r->N+10;i++){
-        nodevec[i].surf = 0;  // initialize  interior
+        nodevec[i].surf = 0;  // initialize as if in interior
         nodevec[i].temp = T0; // temperature
         nodevec[i].cv   = cv; // initialize specific heat      
    }
@@ -162,7 +163,9 @@ struct node *mknodevec(struct reb_simulation* const r, double cv,double T0){
 }
 
 // make sure nodevec.surf is 1 or zero if node is on surface
-// intialize surface temperature
+// intialize surface temperature on each surface node
+// array surfp tells whether node is on surface
+// array of nodes nodevec stores node information
 void surface_nodes(int *surfp, struct node *nodevec, int ntot,  double Tsurf){
    for (int i=0;i<ntot;i++){
       nodevec[i].surf = surfp[i];  // transfer marked surface to nodevec
@@ -181,9 +184,17 @@ void print_node(struct reb_simulation* const r, int npert, struct node *nodevec,
 
    FILE *fpo;
    fpo = fopen(filename, "w");
-   fprintf(fpo,"#%.2e i xyz vxvyvz T cv surf \n",r->t);
-   int il =0;
-   int ih =r->N-npert; // NPERT?
+   fprintf(fpo,"#%.2e i xyz vxvyvz T cv surf m xrot yrot \n",r->t);
+   
+   double xc,yc,zc;
+   int il = 0;
+   int ih =  r->N-1;
+   compute_com(r,il, ih, &xc, &yc, &zc);
+   int im1 = r->N -1; // index for primary perturber
+   double x1 = particles[im1].x; double y1 = particles[im1].y; double z1 = particles[im1].z;
+   double theta = atan2(y1-yc,x1-xc);
+   double ct = cos(theta); double st = sin(-theta);  // note sign!
+   fprintf(fpo,"#%.3f %.3f %.3f %.3f %.3f %.3f %.3f \n",x1,y1,z1,xc,yc,zc,theta);
    
    for (int i=il;i<ih;i++) {
       double x = particles[i].x;
@@ -192,11 +203,16 @@ void print_node(struct reb_simulation* const r, int npert, struct node *nodevec,
       double vx = particles[i].vx;
       double vy = particles[i].vy;
       double vz = particles[i].vz;
+      double m = particles[i].m;
+      double xrot = x*ct - y*st;  
+      double yrot = x*st + y*ct;
       fprintf(fpo,"%4d  ",i);
       fprintf(fpo,"%10.6f %10.6f %10.6f ",x,y,z);
       fprintf(fpo,"%10.6f %10.6f %10.6f   ",vx,vy,vz);
-      fprintf(fpo,"%10.6e %10.6f %3d \n"
-           ,nodevec[i].temp,nodevec[i].cv,nodevec[i].surf);
+      fprintf(fpo,"%10.6e %10.6f %3d %10.6f "
+           ,nodevec[i].temp,nodevec[i].cv,nodevec[i].surf,m);
+      fprintf(fpo,"%10.6e %10.6f ",xrot,yrot);
+      fprintf(fpo,"\n");
    }
    fclose(fpo); 
       
@@ -334,3 +350,19 @@ double dote_radg, int npert)
    }
 }
 
+
+void adjust_nodes_cp(struct reb_simulation* const r, int npert, struct node *nodevec,
+    double cpnew, double Ttrans, int above) 
+{
+   int il =0;
+   int ih =r->N - npert;
+   for(int i=il;i<ih;i++){
+      if ((nodevec[i].temp > Ttrans) && (above ==1)){
+          nodevec[i].cv   = cpnew; // change specific heat if hot
+      }
+      if ((nodevec[i].temp < Ttrans) && (above ==0)){  // if cold
+          nodevec[i].cv   = cpnew; 
+      }
+   }
+      
+}

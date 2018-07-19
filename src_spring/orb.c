@@ -84,6 +84,7 @@ double add_pluto_charon_kep(struct reb_simulation* const r,double mp,
 // if ip==-1 
 //    the extended mass has indices [il,ih)
 //    add a single point mass with extended body orbiting it
+//    the pt mass added is at origin
 //    if extended body is rotating then it still rotates
 //       however if orbit is tilted then obliquity will not be the same
 // return mean motion
@@ -124,7 +125,6 @@ double add_pt_mass_kep(struct reb_simulation* const r,
    cartesian(GM, orbel, &ps);
    double om_orb = sqrt(GM/aa)/aa;
 
-   
    if (ip<0){  // move position of extended body
      pt.x   = 0.0; pt.y   = 0.0; pt.z   = 0.0;
      pt.vx  = 0.0; pt.vy  = 0.0; pt.vz  = 0.0; // new particle is at origin

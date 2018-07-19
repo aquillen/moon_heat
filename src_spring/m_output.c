@@ -36,7 +36,7 @@ void print_surf(struct reb_simulation* const r, int il, int ih, int *surfarr, ch
           r->particles[i].r, r->particles[i].m); 
    }
    fclose(fpo);
-   printf("\n write_particles: N=%d %s\n",r->N,filename);
+   printf("\n print_surf: N=%d %s\n",r->N,filename);
 }
 
 
@@ -115,6 +115,41 @@ void print_extended_simp(struct reb_simulation* const r, int il, int ih, char* f
    mom_inertia(r,il,ih, &Ixx, &Iyy, &Izz,&Ixy, &Iyz, &Ixz);
    fprintf(fpo,"%.5f %.5f %.5f %.5f %.5f %.5f ",Ixx,Iyy,Izz,Ixy,Iyz,Ixz);
 
+   fprintf(fpo,"\n");
+   fclose(fpo);
+}
+
+// print out information for two specific nodes in an extended body indices [il,ih)
+// the first node has largest x value at initial time
+// the second node has largest x value at initial time
+// same nodes are printed each time after they are chosen
+void print_extended_2nodes(struct reb_simulation* const r, int il, int ih, 
+    // struct node* nodevec, 
+    char* filename)
+{
+   static int first=0;
+   static int iz=0; // index of particle with largest z value
+   static int ix=0; // index of particle with largest x value
+   FILE *fpo;
+   if (first==0){
+     first=1;
+     fpo = fopen(filename, "w");
+     fprintf(fpo,"#t xyzvxvyvz(xnode) xyzvxvyvz(znode) \n");
+     iz = nearest_to_shape(r,il,ih, 0.0,0.0,10.0);
+     ix = nearest_to_shape(r,il,ih,10.0,0.0, 0.0);
+   }
+   else {
+     fpo = fopen(filename, "a");
+   }
+   fprintf(fpo,"%.3f ",r->t);
+   fprintf(fpo,"%.5f %.5f %.5f ",
+        r->particles[ix].x,r->particles[ix].y,r->particles[ix].z);
+   fprintf(fpo,"%.5f %.5f %.5f ",
+        r->particles[ix].vx,r->particles[ix].vy,r->particles[ix].vz);
+   fprintf(fpo,"%.5f %.5f %.5f ",
+        r->particles[iz].x,r->particles[iz].y,r->particles[iz].z);
+   fprintf(fpo,"%.5f %.5f %.5f ",
+        r->particles[iz].vx,r->particles[iz].vy,r->particles[iz].vz);
    fprintf(fpo,"\n");
    fclose(fpo);
 }
@@ -291,10 +326,14 @@ void print_bin(struct reb_simulation* const r, int npert, char* filename)
 
 
 // write out springs to a file
-void write_springs(struct reb_simulation* const r,char *fileroot){
+void write_springs(struct reb_simulation* const r,char *fileroot, int index){
    FILE *fpo;
    char filename[100];
+   char istring[100]; 
+   toistring(istring, index);
    strcpy(filename,fileroot);
+   strcat(filename,"_");
+   strcat(filename,istring);
    strcat(filename,"_springs.txt");
    fpo = fopen(filename,"w");
    for(int i=0;i<NS;i++){
@@ -311,9 +350,13 @@ void write_springs(struct reb_simulation* const r,char *fileroot){
 }
 
 
-void read_springs(struct reb_simulation* const r,char *fileroot){
+void read_springs(struct reb_simulation* const r,char *fileroot, int index){
    char filename[100];
+   char istring[100]; 
+   toistring(istring, index);
    strcpy(filename,fileroot);
+   strcat(filename,"_");
+   strcat(filename,istring);
    strcat(filename,"_springs.txt");
    printf("\n reading in springs %s\n",filename);
    FILE *fpi;
@@ -334,9 +377,13 @@ void read_springs(struct reb_simulation* const r,char *fileroot){
 }
 
 
-void read_particles(struct reb_simulation* const r,char *fileroot){
+void read_particles(struct reb_simulation* const r,char *fileroot, int index){
    char filename[100];
+   char istring[100]; 
+   toistring(istring, index);
    strcpy(filename,fileroot);
+   strcat(filename,"_");
+   strcat(filename,istring);
    strcat(filename,"_particles.txt");
    printf("\n reading in particles %s\n",filename);
    FILE *fpi;
@@ -357,10 +404,14 @@ void read_particles(struct reb_simulation* const r,char *fileroot){
    printf("read_particles: N=%d\n",r->N);
 }
 
-void write_particles(struct reb_simulation* const r,char *fileroot){
+void write_particles(struct reb_simulation* const r,char *fileroot, int index){
    FILE *fpo;
    char filename[100];
+   char istring[100]; 
+   toistring(istring, index);
    strcpy(filename,fileroot);
+   strcat(filename,"_");
+   strcat(filename,istring);
    strcat(filename,"_particles.txt");
    fpo = fopen(filename,"w");
    for(int i=0;i< r->N;i++){
@@ -371,5 +422,17 @@ void write_particles(struct reb_simulation* const r,char *fileroot){
    }
    fclose(fpo);
    printf("\n write_particles: N=%d %s\n",r->N,filename);
+}
+
+// give me an integer string
+void toistring(char *istring, int i){
+   char junks[20];
+   sprintf(junks,"%d",i);
+   if (i < 100000) strcpy(istring,"0");
+   if (i < 10000)  strcat(istring,"0");
+   if (i < 1000)   strcat(istring,"0");
+   if (i < 100)    strcat(istring,"0");
+   if (i < 10)     strcat(istring,"0");
+   strcat(istring,junks);
 }
 

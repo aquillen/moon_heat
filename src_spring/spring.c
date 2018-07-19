@@ -147,9 +147,10 @@ int add_spring_i(struct reb_simulation* const r,int i1, int i2,  struct spring s
 }
 
 
-// compute center of mass coordinates in particle range [il,ih-1]
+// compute center of mass coordinates in particle range [il,ih)
 // values returned in xc, yc, zc
-void compute_com(struct reb_simulation* const r,int il, int ih, double *xc, double *yc, double *zc){
+void compute_com(struct reb_simulation* const r,int il, int ih, 
+       double *xc, double *yc, double *zc){
    struct reb_particle* particles = r->particles;
    double xsum = 0.0; double ysum = 0.0; double zsum = 0.0;
    double msum = 0.0;
@@ -175,7 +176,7 @@ double sum_mass(struct reb_simulation* const r,int il, int ih)
    return msum;
 }
 
-// compute center of velocity particles in particle range [il,ih-1]
+// compute center of velocity particles in particle range [il,ih)
 // values returned in vxc, vyc, vzc
 void compute_cov(struct reb_simulation* const r,int il, int ih, 
    double *vxc, double *vyc, double *vzc){
@@ -194,7 +195,7 @@ void compute_cov(struct reb_simulation* const r,int il, int ih,
 }
 
 
-// go to coordinate frame of body defined by vertices/particles [il,ih-1]
+// go to coordinate frame of body defined by vertices/particles [il,ih)
 // mass weighted center of mass
 // only coordinates changed,  particle velocities not changed
 // all particles are shifted, not just the extended body
@@ -364,7 +365,8 @@ void connect_springs_dist(struct reb_simulation* const r, double h_dist, int i0,
 	   double zj =  r->particles[jj].z;
 	   double dr = sqrt((xi-xj)*(xi-xj)+(yi-yj)*(yi-yj)+(zi-zj)*(zi-zj));
            if (dr < h_dist){ 	   // try to add the spring 
-              add_spring_i(r,ii, jj, spring_vals);
+              add_spring_i(r,ii, jj, spring_vals); // will not be added if there is already
+                                                   // one there
               // spring added at rest distance
            }
        }
@@ -500,6 +502,55 @@ void rand_football(struct reb_simulation* const r, double dist,
 }
 
 // create a ~uniform random particle distribution with total mass  = total_mass
+// fill particles within a rectangle shape given by total lengths ax, by, cz
+// spacing set by parameter dist: no closer particles allowed
+void rand_rectangle(struct reb_simulation* const r, double dist, 
+       double ax, double by, double cz, double total_mass)
+{
+   struct reb_particle pt;
+   int npart = 40.0*ax*by*cz/pow(dist,3.0); 
+       // guess for number of random particles we need to generate
+   printf("rand_rectangle: npart=%d\n", npart);
+   pt.ax = 0.0; pt.ay = 0.0; pt.az = 0.0;
+   pt.vx = 0.0; pt.vy = 0.0; pt.vz = 0.0;
+   pt.m = 1.0;
+   double particle_radius = dist/2.0;
+   pt.r = particle_radius/3.0;  // XXXXxxxxx temp
+   int N = r->N;
+   int i0 = N;
+   for(int i=0;i<npart;i++){
+       pt.x = reb_random_uniform(-ax/2,ax/2);
+       pt.y = reb_random_uniform(-by/2,by/2);
+       pt.z = reb_random_uniform(-cz/2,cz/2);
+       {    // within rectangle 
+	  int toonear = 0;  // is there a particle too nearby?
+          int j=i0;  
+          N = r->N;
+          while ((toonear==0) && (j < N)){
+             double dx =  pt.x - r->particles[j].x;
+             double dy =  pt.y - r->particles[j].y;
+             double dz =  pt.z - r->particles[j].z;
+             double dr = sqrt(dx*dx + dy*dy + dz*dz);
+	     if (dr < dist) toonear=1;
+	     j++;
+          }
+	  if (toonear==0) reb_add(r,pt); 
+          // only add particle if not near any other
+       }
+   }
+   N = r->N;
+
+// adjust mass of each particle so that sums to desired total mass
+   double particle_mass = total_mass/(N-i0);	
+// fix masses 
+   for(int ii=i0;ii< N;ii++) { // all particles!
+      r->particles[ii].m = particle_mass;
+   }
+   double md = mindist(r,i0, N);
+   printf("rand_rectangle: Nparticles=%d min_d=%.2f\n",N -i0,md);	
+}
+
+// create a ~uniform random particle distribution with total mass  = total_mass
 // fill particles within a cone shape given by base radius rb, and slope h/rb
 // spacing set by parameter dist: no closer particles allowed
 void rand_cone(struct reb_simulation* const r, double dist, 
@@ -565,7 +616,7 @@ double mean_ks(struct reb_simulation* const r,int type)
 }
 
 
-// compute distance of particle from coordinates (xc,yc,zc)
+// compute distance of particle with index ii from coordinate (xc,yc,zc)
 double rad_com(struct reb_simulation* const r, int ii, double xc, double yc, double zc){
    double dx = r->particles[ii].x - xc;
    double dy = r->particles[ii].y - yc;
@@ -643,14 +694,17 @@ void set_gamma_fac(struct reb_simulation* const r,double gamma_fac){
 }
 
 
-// start the body spinning particles indexes in [il,ih-1]
+// start the body spinning particles indexes in [il,ih)
 // with spin value omegax,omegay,omegaz,  about center of mass
-// center of mass assumed to have zero velocity (velocities set, not added to)
 // spin vector is omegax,omegay,omegaz
+// does not change center of mass coordinates or velocity
 void spin(struct reb_simulation* const r,int il, int ih, 
       double omegax, double omegay, double omegaz){
-   double xc =0.0; double yc =0.0; double zc =0.0;
-   compute_com(r,il, ih, &xc, &yc, &zc); // compute center of mass
+   double xc,yc,zc;
+   compute_com(r,il, ih, &xc, &yc, &zc);// compute center of mass
+   double vxc,vyc,vzc;
+   compute_cov(r,il, ih, &vxc, &vyc, &vzc);
+   
    double omega = sqrt(omegax*omegax + omegay*omegay + omegaz*omegaz); 
    // size limit
    if (omega > 1e-5){
@@ -661,9 +715,10 @@ void spin(struct reb_simulation* const r,int il, int ih,
        double rcrosso_x = -dy*omegaz + dz*omegay;   // r cross omega
        double rcrosso_y = -dz*omegax + dx*omegaz;
        double rcrosso_z = -dx*omegay + dy*omegax;
-       r->particles[i].vx = rcrosso_x; // set it spinning with respect to center of mass
-       r->particles[i].vy = rcrosso_y; // note center of mass assumed to have zero velocity!
-       r->particles[i].vz = rcrosso_z;
+       r->particles[i].vx = vxc + rcrosso_x; 
+                // set it spinning with respect to center of mass
+       r->particles[i].vy = vyc + rcrosso_y; 
+       r->particles[i].vz = vzc + rcrosso_z;
      }
    }
 
@@ -705,10 +760,12 @@ double get_angle(struct reb_simulation* const r,int i, int j)
    return theta;
 }
 
-// compute angular momentum vector of a body with respect to its center of mass position
-// and velocity for particles in range [il,ih)
+// compute angular momentum vector of a body with particles in range [il,ih)
+// with respect to its center of mass position and velocity 
 // can measure angular momentum of the entire system if il=0 and ih=N
-void  measure_L(struct reb_simulation* const r,int il, int ih, double *llx, double *lly, double *llz){
+// but with respect to center of mass of entire system
+void  measure_L(struct reb_simulation* const r,int il, int ih, 
+		double *llx, double *lly, double *llz){
    struct reb_particle* particles = r->particles;
    double xc =0.0; double yc =0.0; double zc =0.0;
    compute_com(r,il, ih, &xc, &yc, &zc);
@@ -732,6 +789,30 @@ void  measure_L(struct reb_simulation* const r,int il, int ih, double *llx, doub
    *llz = lz;
 
 }
+
+// compute angular momentum vector of all particles in range [il,ih)
+// with respect to origin
+void measure_L_origin(struct reb_simulation* const r,int il, int ih, 
+        double *llx, double *lly, double *llz){
+   struct reb_particle* particles = r->particles;
+
+   double lx = 0.0; double ly = 0.0; double lz = 0.0;
+   for(int i=il;i<ih;i++){ 
+       double dx =  (particles[i].x);
+       double dy =  (particles[i].y);
+       double dz =  (particles[i].z);
+       double dvx =  (particles[i].vx);
+       double dvy =  (particles[i].vy);
+       double dvz =  (particles[i].vz);
+       lx += particles[i].m*(dy*dvz - dz*dvy); // angular momentum vector
+       ly += particles[i].m*(dz*dvx - dx*dvz);
+       lz += particles[i].m*(dx*dvy - dy*dvx);
+   }
+   *llx = lx;
+   *lly = ly;
+   *llz = lz;
+}
+
 
 // compute the moment of inertia tensor of a body with particle indices [il,ih)
 // with respect to center of mass
@@ -818,10 +899,11 @@ void compute_semi(struct reb_simulation* const r, int il,int ih, int im1,
    
 }
 
-// compute the orbital angular momentum vector
-// resolved body indexes [il,ih)
-// primary mass is at index [N-1] but includes npert if more than one perturbers
+// compute the orbital angular momentum vector of a resolved body
+// resolved body at indexes [il,ih)
 // returns orbital angular momentum vector
+// computes orbital angular momentum about central mass if there is one mass
+// otherwise computes it about the center of mass of all the perturbers
 void compute_Lorb(struct reb_simulation* const r, int il,int ih, int npert,
  double *llx, double *lly, double *llz)
 {
@@ -959,8 +1041,10 @@ void compute_semi_bin(struct reb_simulation* const r, int il, int ih,
 }
 
 
+/* ****************** obsolete
 // compute obital angular momentum with respect to center of mass of whole system 
 // single massive object is particle at i=N-1
+// assumes only a single massive perturber
 // rest of particles assumed to be in a resolved body
 void compute_lorb(struct reb_simulation* const r, double *lx, double *ly, double *lz)
 {
@@ -999,6 +1083,8 @@ void compute_lorb(struct reb_simulation* const r, double *lx, double *ly, double
    *ly = m1*(dz1*dvx1 - dx1*dvz1) + tm*(dz*dvx - dx*dvz); 
    *lz = m1*(dx1*dvy1 - dy1*dvx1) + tm*(dx*dvy - dy*dvx);
 }
+**********************
+*/
 
 // sum total momentum of particles
 void total_mom(struct reb_simulation* const r,int il, int ih, double *ppx, double *ppy, double *ppz){
@@ -1014,10 +1100,51 @@ void total_mom(struct reb_simulation* const r,int il, int ih, double *ppx, doubl
    
 }
 
+// using Euler angles rotate all particles [il,ih) about origin
+// rotate both position and velocities
+void rotate_origin(struct reb_simulation* const r, int il, int ih, 
+     double alpha, double beta, double ggamma)
+{
+   struct reb_particle* particles = r->particles;
+   for(int i=il;i<ih;i++){
+     double x0 = particles[i].x;
+     double y0 = particles[i].y;
+     double z0 = particles[i].z;
+     double x1 = x0*cos(alpha) - y0*sin(alpha);  // rotate about z axis in xy plane
+     double y1 = x0*sin(alpha) + y0*cos(alpha);
+     double z1 = z0;
+     double x2 = x1;                             // rotate about x' axis in yz plane
+     double y2 = y1*cos(beta)  - z1*sin(beta);
+     double z2 = y1*sin(beta)  + z1*cos(beta);
+     double x3 = x2*cos(ggamma) - y2*sin(ggamma);  // rotate about z'' axis in xy plane
+     double y3 = x2*sin(ggamma) + y2*cos(ggamma);
+     double z3 = z2;
+     particles[i].x = x3;
+     particles[i].y = y3;
+     particles[i].z = z3;
+
+     double vx0 = particles[i].vx ;
+     double vy0 = particles[i].vy ;
+     double vz0 = particles[i].vz ;
+     double vx1 = vx0*cos(alpha) - vy0*sin(alpha);  // rotate about z axis in xy plane
+     double vy1 = vx0*sin(alpha) + vy0*cos(alpha);
+     double vz1 = vz0;
+     double vx2 = vx1;                              // rotate about x' axis in yz plane
+     double vy2 = vy1*cos(beta)  - vz1*sin(beta);
+     double vz2 = vy1*sin(beta)  + vz1*cos(beta);
+     double vx3 = vx2*cos(ggamma) - vy2*sin(ggamma);  // rotate about z'' axis in xy plane
+     double vy3 = vx2*sin(ggamma) + vy2*cos(ggamma);
+     double vz3 = vz2;
+     particles[i].vx = vx3 ;
+     particles[i].vy = vy3 ;
+     particles[i].vz = vz3 ;
+   } 
+}
 
 // using Euler angles rotate a body with particle indices [il,ih)
 // about center of mass
 // rotate both position and velocities
+// center of mass position and velocity is not changed
 void rotate_body(struct reb_simulation* const r, int il, int ih, 
      double alpha, double beta, double ggamma)
 {
@@ -1188,10 +1315,10 @@ void body_spin(struct reb_simulation* const r, int il, int ih,
 }
 
 
-// adjust ks and gamma 
+// adjust ks and gamma  and k_heat
 // for springs with midpoints between rmin and rmax of center of mass
 void adjust_ks(struct reb_simulation* const r, int npert, 
-    double ksnew, double gammanew, double rmin, double rmax)
+    double ksnew, double gammanew, double kheatnew, double rmin, double rmax)
 {
    // struct reb_particle* particles = r->particles;
    int il =0;
@@ -1200,6 +1327,7 @@ void adjust_ks(struct reb_simulation* const r, int npert,
    compute_com(r,il, ih, &xc, &yc, &zc);
    double xmid,ymid,zmid;
    for(int i=0;i<NS;i++){
+      // compute spring mid point from central position
       spr_xyz_mid(r, springs[i], xc, yc, zc, &xmid, &ymid, &zmid);
       double rmid = sqrt(xmid*xmid + ymid*ymid + zmid*zmid); 
       // double thetamid = asin(zmid/rmid); // latitude angle
@@ -1207,15 +1335,20 @@ void adjust_ks(struct reb_simulation* const r, int npert,
       if ((rmid >= rmin) && (rmid <= rmax)){
            springs[i].ks=ksnew;
            springs[i].gamma=gammanew;
+           springs[i].k_heat=kheatnew;
       }
    }
    
 }
 
-// adjust ks and gamma 
-// for springs with midpoints within ellipsoid set by x^2/a^2 + y^2/b^2 + z^2/c^2 = 1
+// adjust ks and gamma and kheat
+// for springs with midpoints within or outside of ellipsoid set 
+// by (x-x0)^2/a^2 + (y-y0)^2/b^2 + (z-z0)^2/c^2 = 1
+// inside==1 then inside ellipsoid
+// inside==0 then outside
 void adjust_ks_abc(struct reb_simulation* const r, int npert, 
-    double ksnew, double gammanew, double a, double b, double c)
+    double ksnew, double gammanew, double kheatnew, double a, double b, double c,
+    double x0,double y0, double z0, int inside)
 {
    // struct reb_particle* particles = r->particles;
    int il =0;
@@ -1224,23 +1357,33 @@ void adjust_ks_abc(struct reb_simulation* const r, int npert,
    compute_com(r,il, ih, &xc, &yc, &zc);
    double xmid,ymid,zmid;
    for(int i=0;i<NS;i++){
+      // compute spring mid point from central position
       spr_xyz_mid(r, springs[i], xc, yc, zc, &xmid, &ymid, &zmid);
-      double rmid2 = xmid*xmid/(a*a) + ymid*ymid/(b*b) + zmid*zmid/(c*c); 
-      if (rmid2 <= 1.0){
+      double rmid2 = pow((xmid-x0)/a,2.0) + pow((ymid-y0)/b,2.0) + pow((zmid-z0)/c,2.0); 
+      if ((rmid2 <= 1.0) && (inside ==1)){
            springs[i].ks=ksnew;
            springs[i].gamma=gammanew;
+           springs[i].k_heat=kheatnew;
+      }
+      if ((rmid2 >= 1.0) && (inside ==0)){
+           springs[i].ks=ksnew;
+           springs[i].gamma=gammanew;
+           springs[i].k_heat=kheatnew;
       }
    }
 }
 
-// change all mass nodes with r within ellipsoid, 
-// set by x^2/a^2 + y^2/b^2 + z^2/c^2 = 1
+// change all mass nodes with r within or without ellipsoid 
+// with (x-x0)^2/a^2 + (y-y0)^2/b^2 + (z-z0)^2/c^2 = 1
 // by factor mfac (multiplied)
 // done with respect to center of mass
 // then normalize so that total mass sum to 1 again
 // mfac is the density ratio if nodes are evenly distributed in space  
+// inside==1 then inside ellipsoid
+// inside==0 then outside
 void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac, 
-     double a, double b, double c)
+     double a, double b, double c,
+     double x0,double y0, double z0, int inside)
 {
    struct reb_particle* particles = r->particles;
    int il =0;
@@ -1248,19 +1391,31 @@ void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac,
    int ncore =0;
    double xc,yc,zc;
    compute_com(r,il, ih, &xc, &yc, &zc);
-   double rfac = pow(mfac,1.0/3.0);
+   double rfac = pow(mfac,1.0/3.0); // interesting choice!!!!
    for(int i=il;i<ih;i++){
       double x =  particles[i].x-xc;
       double y =  particles[i].y-yc;
       double z =  particles[i].z-zc;
-      double rmid2 =  x*x/(a*a) + y*y/(b*b) + z*z/(c*c);
-      if (rmid2 < 1.0)  {
-         ncore++; // numbers of nodes in core
-         particles[i].m *=  mfac; 
-         particles[i].r *=  rfac; 
+      double rmid2 =  pow((x-x0)/a,2.0) + pow((y-y0)/b,2.0) + pow((z-z0)/c,2.0);
+      if (inside ==1){
+         if (rmid2 < 1.0)  {
+           ncore++; // numbers of nodes in core
+           particles[i].m *=  mfac; 
+           particles[i].r *=  rfac; 
+         }
+         else{
+            particles[i].r /=  rfac; 
+         }
       }
-      else{
-         particles[i].r /=  rfac; 
+      if (inside ==0){
+         if (rmid2 > 1.0)  {
+           particles[i].m *=  mfac; 
+           particles[i].r *=  rfac; 
+         }
+         else{
+            particles[i].r /=  rfac; 
+            ncore++; // numbers of nodes in core
+         }
       }
    }
    // if nodes are evenly distributed in volume then mass of node scales with density 
@@ -1269,7 +1424,7 @@ void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac,
    double tm = 0.0; // total mass
    for(int i=il;i<ih;i++) tm += particles[i].m; // total mass!
    for(int i=il;i<ih;i++) particles[i].m /=tm;
-   // now normalized
+   // now normalized mass to 1
 }
 
 // change all masses with x>xmin by factor mfac, then rescale so sum is still 1
@@ -1506,9 +1661,12 @@ double min_radius(struct reb_simulation* r,int il, int ih){
 // before doing this routine check to see if radius is within largest to smallest
 // of shape model
 // this just finds nearest particle, can be used outside of shape model stuff
+// note, we have not necessarily centered the body prior to calling this routine
+// origin might not be center of body
 int nearest_to_shape(struct reb_simulation* r,int il, int ih, double x,double y, double z){
-  double dist2 = 1e20;
-  double i0=0;
+  double dist2 = 1e30;
+  int i0=0;
+  // printf("%.3f %.3f %.3f \n",x,y,z);
   for(int i=il;i<ih;i++){
      double r2 = pow(r->particles[i].x - x,2.0);
      r2       += pow(r->particles[i].y - y,2.0);
@@ -1516,9 +1674,13 @@ int nearest_to_shape(struct reb_simulation* r,int il, int ih, double x,double y,
      if (r2 < dist2){
         i0 = i;
         dist2 = r2;
+        // printf("%d %.3f\n",i0,dist2);
      }
+     // printf("%.3f %.3f %.3f %.3e\n",r->particles[i].x, r->particles[i].y,r->particles[i].z,r2);
   }
-  return i0;
+  // printf("final %d %.3f\n",i0, r->particles[i0].z);
+  // exit(0);
+  return i0; // ACQ fix xxxxxx
 }
 
 
