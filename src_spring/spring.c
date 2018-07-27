@@ -1840,7 +1840,7 @@ int *marksurface_football(struct reb_simulation* const r, double mind,
           npsurf ++;
       }
       else { 
-          r->particles[j].r = 0.001; // shrink so hard to see!
+          // r->particles[j].r = 0.001; // shrink so hard to see!
           // leaving visible only surface particles
       }
    }
