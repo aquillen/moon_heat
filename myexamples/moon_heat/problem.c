@@ -90,6 +90,8 @@ int main(int argc, char* argv[]){
         double x_shell = 0.0; // shell offsets
         double y_shell = 0.0;
         double z_shell = 0.0;
+        double ks_fac  = 0.0; // lopsided parm for ks
+        double fmfac = 0.1;   // density factor
 
     if (argc ==1){
         strcpy(froot,"t1");   // to make output files
@@ -146,7 +148,7 @@ int main(int argc, char* argv[]){
         fgets(line,300,fpi);  sscanf(line,"%lf",&dote_radg);
         fgets(line,300,fpi);  sscanf(line,"%lf",&R_shell);
         fgets(line,300,fpi);  sscanf(line,"%lf %lf",&ba_shell,&ca_shell);
-        fgets(line,300,fpi);  sscanf(line,"%lf %lf %lf",&x_shell,&y_shell,&z_shell);
+        fgets(line,300,fpi);  sscanf(line,"%lf %lf %lf %lf %lf",&x_shell,&y_shell,&z_shell,&fmfac,&ks_fac);
 
         fgets(line,300,fpi);  sscanf(line,"%d",&npointmass);
         for (int ip=0;ip<npointmass;ip++){
@@ -203,6 +205,7 @@ int main(int argc, char* argv[]){
    // printf("vol_ratio %.6f\n",volume_ratio); // with respect to 4pi/3 
    // so I can check that it is set to 1
    // working in units of volume equivalent sphere
+   fprintf(fpr,"fmfac %.6f\n",fmfac ); // 
 
    // create particle distribution
    if (lattice_type==0){
@@ -250,12 +253,6 @@ int main(int argc, char* argv[]){
    print_run_double(mean_L(r),"Mean spring length", fpr);
 
 
-   if (R_shell >0){
-      adjust_ks_abc(r, npert, spring_mush_cold.ks, spring_mush_cold.gamma, 
-                  spring_mush_cold.k_heat, R_shell, ba_shell*R_shell,ca_shell*R_shell,
-                   x_shell, y_shell, z_shell, 0); // x0,y0,z0, not-inside
-      // adjust_nodes_cp(r, npert, nodevec,Tinit/2,cp_cold,1); // adjust below transition temp
-   }
 
 
    double om = 0.0; // set up the perturbing central mass
@@ -306,8 +303,8 @@ int main(int argc, char* argv[]){
 
    // now spin it
    spin(r,il, ih, 0.0, 0.0, omegaz);  // you can change one of these to tilt!
-   if (obliquity != 0.0)
-        rotate_body(r, il, ih, 0.0, obliquity, 0.0); // tilt by obliquity in radians
+   // if (obliquity != 0.0)
+   //   rotate_body(r, il, ih, 0.0, obliquity, 0.0); // tilt by obliquity in radians
      // note: if orbit is inclined this is not actually the obliquity
 
    double llx,lly,llz;
@@ -325,6 +322,34 @@ int main(int argc, char* argv[]){
    rotate_origin(r,0,r->N,0,-atan2(lly,llz),0); // rotate by Euler angles, including velocities
    measure_L_origin(r,0,r->N, &llx, &lly, &llz); // total angular momentum
    printf("llx lly llz = %.6e %.6e %.6e\n",llx,lly,llz);
+// right now seems like orbit starts with big guy in negative y
+
+   if (obliquity != 0.0)
+        rotate_body(r, il, ih, 0.0, obliquity, 0.0); // tilt by obliquity in radians
+
+   if (R_shell >0){
+      adjust_ks_abc(r, npert, spring_mush_cold.ks, spring_mush_cold.gamma,spring_mush_cold.k_heat, 
+		R_shell, ba_shell*R_shell,ca_shell*R_shell,
+                   x_shell, y_shell, z_shell, 0); // x0,y0,z0, not-inside
+      // adjust springs outside an ellipsoid with semi-axes: a=R, b=ba*R, c=ca*R
+      // and with center x_shell,y_shell,z_shell
+   
+      if (fabs(fmfac) >1e-3)
+          adjust_mass_abc(r, npert, fmfac+1.0,  R_shell, ba_shell*R_shell,ca_shell*R_shell,
+                x_shell, y_shell+0.0, z_shell, 0); // x0,y0,z0, not-inside 
+      // adjust density by mfac! 
+      // adjust_nodes_cp(r, npert, nodevec,Tinit/2,cp_cold,1); // adjust below transition temp
+
+// lopsided softening of springs in shell
+      if (fabs(ks_fac) >1e-3){
+          double mm=1.0;
+          double phi0=0.0; // which side is lopsided in spring strengths
+          adjust_ks_abc_fac(r, npert, spring_mush_cold.ks, spring_mush_cold.gamma, spring_mush_cold.k_heat, 
+    		ks_fac, 0.0, 0.0, mm, phi0, 
+    		R_shell, ba_shell*R_shell,ca_shell*R_shell,
+                   x_shell, y_shell, z_shell, 0); // x0,y0,z0, not-inside
+      }
+   }
 
    reb_springs(r); // pass spring index list to display
    set_gamma_fac(1.0/gamma_fac);

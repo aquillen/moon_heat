@@ -90,6 +90,7 @@ void rmvertices();
 void rmshape_vertices();
 void read_vertex_file();
 void adjust_ks_abc();
+void adjust_ks_abc_fac();
 void adjust_mass_abc();
 void subtractcov();
 void subtractcom();

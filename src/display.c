@@ -439,6 +439,7 @@ static void reb_display(GLFWwindow* window){
         data->view.y = 0.0;
         data->view.z = 1.0*sth;
         data->view.w = 1.0*cth;
+        // glUniform3f(data->sphere_shader_lightdir_location,p.x,p.y,p.z); // ACQ nojoy
     } //ACQ
     static int rot_first2=0;
     static int rot_imark2=0;

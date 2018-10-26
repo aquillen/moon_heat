@@ -1347,7 +1347,7 @@ void adjust_ks(struct reb_simulation* const r, int npert,
 // inside==1 then inside ellipsoid
 // inside==0 then outside
 void adjust_ks_abc(struct reb_simulation* const r, int npert, 
-    double ksnew, double gammanew, double kheatnew, double a, double b, double c,
+    double ksnew, double gammanew, double kheatnew,  double a, double b, double c,
     double x0,double y0, double z0, int inside)
 {
    // struct reb_particle* particles = r->particles;
@@ -1373,6 +1373,42 @@ void adjust_ks_abc(struct reb_simulation* const r, int npert,
    }
 }
 
+// adjust ks and gamma and kheat by a factor *= 1.0+fac*cos(mm*(phi-phi0))
+// here phi is the angle in the xy plane
+// for springs with midpoints within or outside of ellipsoid set 
+// by (x-x0)^2/a^2 + (y-y0)^2/b^2 + (z-z0)^2/c^2 = 1
+// inside==1 then inside ellipsoid
+// inside==0 then outside
+void adjust_ks_abc_fac(struct reb_simulation* const r, int npert, 
+    double ks_fac, double gamma_fac, double kheat_fac, int mm, double phi0, double a, double b, double c,
+    double x0,double y0, double z0, int inside)
+{
+   // struct reb_particle* particles = r->particles;
+   int il =0;
+   int ih =r->N - npert; 
+   double xc,yc,zc;
+   compute_com(r,il, ih, &xc, &yc, &zc);
+   double xmid,ymid,zmid;
+   for(int i=0;i<NS;i++){
+      // compute spring mid point from central position
+      spr_xyz_mid(r, springs[i], xc, yc, zc, &xmid, &ymid, &zmid);
+      double rmid2 = pow((xmid-x0)/a,2.0) + pow((ymid-y0)/b,2.0) + pow((zmid-z0)/c,2.0); 
+      double phi = atan2(ymid-y0,xmid-x0);
+      // double theta = acos(zmid-z0);
+      double angfac = cos(mm*(phi-phi0));
+      if ((rmid2 <= 1.0) && (inside ==1)){
+           springs[i].ks     *=1.0 + ks_fac*angfac;
+           springs[i].gamma  *=1.0 + gamma_fac*angfac;
+           springs[i].k_heat *=1.0 + kheat_fac*angfac;
+      }
+      if ((rmid2 >= 1.0) && (inside ==0)){
+           springs[i].ks     *=1.0 + ks_fac*angfac;
+           springs[i].gamma  *=1.0 + gamma_fac*angfac;
+           springs[i].k_heat *=1.0 + kheat_fac*angfac;
+      }
+   }
+}
+
 // change all mass nodes with r within or without ellipsoid 
 // with (x-x0)^2/a^2 + (y-y0)^2/b^2 + (z-z0)^2/c^2 = 1
 // by factor mfac (multiplied)
@@ -1391,7 +1427,7 @@ void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac,
    int ncore =0;
    double xc,yc,zc;
    compute_com(r,il, ih, &xc, &yc, &zc);
-   double rfac = pow(mfac,1.0/3.0); // interesting choice!!!!
+   double rfac = pow(mfac,1.0/2.0); // interesting choice!!!!
    for(int i=il;i<ih;i++){
       double x =  particles[i].x-xc;
       double y =  particles[i].y-yc;
@@ -1399,7 +1435,7 @@ void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac,
       double rmid2 =  pow((x-x0)/a,2.0) + pow((y-y0)/b,2.0) + pow((z-z0)/c,2.0);
       if (inside ==1){
          if (rmid2 < 1.0)  {
-           ncore++; // numbers of nodes in core
+           ncore++; // numbers of nodes in core  
            particles[i].m *=  mfac; 
            particles[i].r *=  rfac; 
          }
@@ -1420,7 +1456,7 @@ void adjust_mass_abc(struct reb_simulation* const r, int npert, double mfac,
    }
    // if nodes are evenly distributed in volume then mass of node scales with density 
 
-   printf("adjust_mass_abc: ncore=%d \n",ncore);
+   printf("adjust_mass_abc: ncore=%d nshell=%d\n",ncore,r->N-npert -ncore);
    double tm = 0.0; // total mass
    for(int i=il;i<ih;i++) tm += particles[i].m; // total mass!
    for(int i=il;i<ih;i++) particles[i].m /=tm;

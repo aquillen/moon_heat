@@ -1,4 +1,4 @@
-m2      froot       # output file root name
+o2      froot       # output file root name
 0.005   dt          # timestep
 2e2     tmax        # total integration time  
 1.0     t_print     # time for output prints
@@ -26,8 +26,8 @@ m2      froot       # output file root name
 1.0e-10 Tinit       # initial temperature of all interior nodes
 0.0     dote_radg   # radiogenic heating energy per unit mass per unit time
 0.7     R_shell     # two layer model transition radius
-1.0 1.0      ba_shell ca_shell       # axis ratios for shell ellipsoid
-0.0 0.0 0.0 0.0 0.0  x_shell y_shell z_shell fmfac ksfac # shell offset for ellipsoid
+1.0 1.25     ba_shell ca_shell       # axis ratios for shell ellipsoid
+0.0 -0.15 0.0 -0.0 0.0  x_shell y_shell z_shell fmfac ksfac # shell offset for ellipsoid
 1       npointmass                   # number of point masses
 813.  3.7 0.0  0.0                  #  mass,rad,itaua,itaue
 15.1  0.20 0.00 0.0  0.0  0.0         # aa,ee,ii,longnode,argperi,meananom for extended body
